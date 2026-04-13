@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { put } from "@vercel/blob";
 import { getServerConfig } from "@/lib/server/config";
 
 function sanitizeFileName(fileName: string) {
@@ -19,16 +20,35 @@ export function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export async function saveBrowserFile(file: File) {
+export async function saveUploadedFile(file: File) {
   const { files } = getServerConfig();
   const buffer = Buffer.from(await file.arrayBuffer());
-  await mkdir(files.publicUploadDir, { recursive: true });
   const fileName = `${randomUUID()}-${sanitizeFileName(file.name)}`;
-  const absolutePath = path.join(files.publicUploadDir, fileName);
+
+  if (files.provider === "vercel-blob") {
+    if (!files.blobReadWriteToken) {
+      throw new Error("Missing BLOB_READ_WRITE_TOKEN for Vercel Blob uploads");
+    }
+
+    const blob = await put(`uploads/${fileName}`, buffer, {
+      access: "public",
+      addRandomSuffix: false,
+      contentType: file.type || undefined,
+      token: files.blobReadWriteToken
+    });
+
+    return {
+      url: blob.url,
+      buffer
+    };
+  }
+
+  await mkdir(files.localUploadDir, { recursive: true });
+  const absolutePath = path.join(files.localUploadDir, fileName);
   await writeFile(absolutePath, buffer);
 
   return {
-    url: `${files.publicUploadUrlBase}/${fileName}`,
+    url: `${files.localUploadUrlBase}/${fileName}`,
     buffer
   };
 }

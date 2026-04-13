@@ -23,8 +23,10 @@ type ServerConfig = {
     imageGenerationModel: string;
   };
   files: {
-    publicUploadDir: string;
-    publicUploadUrlBase: string;
+    provider: "local" | "vercel-blob";
+    localUploadDir: string;
+    localUploadUrlBase: string;
+    blobReadWriteToken?: string;
     maxUploadFileSizeMb: number;
   };
   knowledge: {
@@ -112,6 +114,17 @@ function readBoolean(env: AppEnv, key: string, fallback: boolean) {
   throw new Error(`Invalid ${key}: expected true or false`);
 }
 
+function readStorageProvider(env: AppEnv) {
+  const fallback = env.BLOB_READ_WRITE_TOKEN?.trim() ? "vercel-blob" : "local";
+  const value = readString(env, "UPLOAD_STORAGE_PROVIDER", fallback);
+
+  if (value !== "local" && value !== "vercel-blob") {
+    throw new Error("Invalid UPLOAD_STORAGE_PROVIDER: expected local or vercel-blob");
+  }
+
+  return value;
+}
+
 function inferHttpApiBaseUrl(compatibleBaseUrl: string) {
   if (compatibleBaseUrl.includes("dashscope-intl.aliyuncs.com")) {
     return "https://dashscope-intl.aliyuncs.com/api/v1";
@@ -130,8 +143,9 @@ export function createServerConfig(env: AppEnv = process.env): ServerConfig {
     "DASHSCOPE_BASE_URL",
     DEFAULT_DASHSCOPE_COMPATIBLE_BASE_URL
   );
-  const publicUploadDirName = readString(env, "UPLOAD_PUBLIC_DIR", "uploads").replace(/^\/+|\/+$/g, "");
-  const publicUploadUrlBase = `/${publicUploadDirName}`;
+  const provider = readStorageProvider(env);
+  const localUploadDirName = readString(env, "UPLOAD_LOCAL_DIR", "uploads").replace(/^\/+|\/+$/g, "");
+  const localUploadUrlBase = `/${localUploadDirName}`;
 
   return {
     databaseUrl: env.DATABASE_URL?.trim() || undefined,
@@ -159,8 +173,10 @@ export function createServerConfig(env: AppEnv = process.env): ServerConfig {
       imageGenerationModel: readString(env, "DASHSCOPE_IMAGE_GENERATION_MODEL", "wan2.6-image")
     },
     files: {
-      publicUploadDir: path.join(process.cwd(), "public", publicUploadDirName),
-      publicUploadUrlBase,
+      provider,
+      localUploadDir: path.join(process.cwd(), "public", localUploadDirName),
+      localUploadUrlBase,
+      blobReadWriteToken: env.BLOB_READ_WRITE_TOKEN?.trim() || undefined,
       maxUploadFileSizeMb: readPositiveInt(env, "UPLOAD_MAX_FILE_SIZE_MB", 20)
     },
     knowledge: {

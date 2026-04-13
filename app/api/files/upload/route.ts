@@ -1,7 +1,7 @@
 import { attachmentRepository } from "@/lib/server/repositories/attachment-repository";
 import { toClientAttachment } from "@/lib/server/chat-mappers";
 import { getKnowledgeEmbeddingModel, createKnowledgeEmbedding } from "@/lib/server/knowledge";
-import { extractTextContent, formatFileSize, saveBrowserFile } from "@/lib/server/files";
+import { extractTextContent, formatFileSize, saveUploadedFile } from "@/lib/server/files";
 import { getServerConfig } from "@/lib/server/config";
 import { requireUser } from "@/lib/server/auth";
 
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
           throw new Error(`File ${file.name} exceeds the ${getServerConfig().files.maxUploadFileSizeMb} MB limit`);
         }
 
-        const { url, buffer } = await saveBrowserFile(file);
+        const { url, buffer } = await saveUploadedFile(file);
         const content = await extractTextContent(file, buffer);
         const isKnowledge = purpose === "knowledge";
         const embedding =

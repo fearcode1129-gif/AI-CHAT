@@ -6,3 +6,4 @@ node_modules
 npm-debug.log*
 .codex-dev.log
 .codex-dev.err.log
+public/uploads
