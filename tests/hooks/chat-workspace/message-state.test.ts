@@ -5,7 +5,7 @@ import {
   createDraftMessages,
   moveChatMessages,
   updateAssistantMessage
-} from "@/hooks/chat-workspace/message-state";
+} from "@/features/chat/hooks/chat-workspace/message-state";
 
 describe("chat workspace message state helpers", () => {
   it("creates draft user and assistant messages", () => {

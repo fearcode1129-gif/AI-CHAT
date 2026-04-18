@@ -4,8 +4,8 @@ import React from "react";
 import { act, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MessageList } from "@/components/message-list";
-import type { Message } from "@/lib/types";
+import { MessageList } from "@/features/chat/components/message-list";
+import type { Message } from "@/shared/types";
 
 const baseMessages: Message[] = [
   {

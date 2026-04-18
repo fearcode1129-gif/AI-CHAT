@@ -35,7 +35,7 @@ describe("extractTextContent", () => {
   });
 
   it("extracts text from pdf files", async () => {
-    const { extractTextContent } = await import("@/lib/server/files");
+    const { extractTextContent } = await import("@/features/files/server/services/files");
     const file = new File([new Uint8Array([1, 2, 3])], "resume.pdf", {
       type: "application/pdf"
     });
@@ -52,7 +52,7 @@ describe("extractTextContent", () => {
   });
 
   it("returns plain text for text-like files", async () => {
-    const { extractTextContent } = await import("@/lib/server/files");
+    const { extractTextContent } = await import("@/features/files/server/services/files");
     const file = new File(["hello"], "note.txt", { type: "text/plain" });
 
     await expect(extractTextContent(file)).resolves.toBe("hello");
@@ -69,7 +69,7 @@ describe("extractTextContent", () => {
       url: "https://blob.vercel-storage.com/uploads/resume.pdf"
     });
 
-    const { saveUploadedFile } = await import("@/lib/server/files");
+    const { saveUploadedFile } = await import("@/features/files/server/services/files");
     const file = new File(["hello"], "resume.txt", { type: "text/plain" });
     const result = await saveUploadedFile(file);
 

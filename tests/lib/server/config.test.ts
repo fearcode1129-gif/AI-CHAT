@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 describe("server config", () => {
   it("builds a normalized config object from env", async () => {
-    const { createServerConfig } = await import("@/lib/server/config");
+    const { createServerConfig } = await import("@/server/config/config");
     const config = createServerConfig({
       DASHSCOPE_API_KEY: "test-key",
       DASHSCOPE_BASE_URL: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
@@ -25,13 +25,13 @@ describe("server config", () => {
   });
 
   it("throws for missing required env vars", async () => {
-    const { createServerConfig } = await import("@/lib/server/config");
+    const { createServerConfig } = await import("@/server/config/config");
 
     expect(() => createServerConfig({})).toThrowError("Missing DASHSCOPE_API_KEY");
   });
 
   it("switches uploads to vercel blob when a blob token is present", async () => {
-    const { createServerConfig } = await import("@/lib/server/config");
+    const { createServerConfig } = await import("@/server/config/config");
     const config = createServerConfig({
       DASHSCOPE_API_KEY: "test-key",
       BLOB_READ_WRITE_TOKEN: "blob-token"

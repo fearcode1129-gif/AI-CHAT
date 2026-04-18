@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach } from "vitest";
 
-import { useChatWorkspaceState } from "@/hooks/chat-workspace/use-chat-workspace-state";
+import { useChatWorkspaceState } from "@/features/chat/hooks/chat-workspace/use-chat-workspace-state";
+import { useChatWorkspaceStore } from "@/features/chat/stores/chat-workspace-store";
 
 function Harness() {
   const state = useChatWorkspaceState();
@@ -27,6 +28,7 @@ function Harness() {
 
 describe("useChatWorkspaceState", () => {
   afterEach(() => {
+    useChatWorkspaceStore.getState().reset();
     cleanup();
   });
 

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 describe("quota helpers", () => {
   it("builds a daily usage snapshot with remaining quota", async () => {
     vi.resetModules();
-    vi.doMock("@/lib/server/config", () => ({
+    vi.doMock("@/server/config/config", () => ({
       getServerConfig: () => ({
         quota: {
           timezone: "Asia/Shanghai",
@@ -17,7 +17,7 @@ describe("quota helpers", () => {
       })
     }));
 
-    const { buildDailyUsageSnapshot } = await import("@/lib/server/quota");
+    const { buildDailyUsageSnapshot } = await import("@/features/usage/server/services/quota");
     const snapshot = buildDailyUsageSnapshot(
       {
         plan: "free",
@@ -34,7 +34,7 @@ describe("quota helpers", () => {
 
   it("marks a snapshot as exceeded when usage reaches the plan limit", async () => {
     vi.resetModules();
-    vi.doMock("@/lib/server/config", () => ({
+    vi.doMock("@/server/config/config", () => ({
       getServerConfig: () => ({
         quota: {
           timezone: "Asia/Shanghai",
@@ -48,7 +48,7 @@ describe("quota helpers", () => {
       })
     }));
 
-    const { buildDailyUsageSnapshot } = await import("@/lib/server/quota");
+    const { buildDailyUsageSnapshot } = await import("@/features/usage/server/services/quota");
     const snapshot = buildDailyUsageSnapshot(
       {
         plan: "free",

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { formatRelativeTime } from "@/lib/utils";
+import { formatRelativeTime } from "@/shared/lib/utils";
 
 describe("formatRelativeTime", () => {
   it("formats recent minutes", () => {

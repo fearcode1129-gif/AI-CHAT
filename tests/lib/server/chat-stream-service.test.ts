@@ -16,28 +16,28 @@ const recordDailyUsageMock = vi.fn();
 
 const createDashScopeChatStreamMock = vi.fn();
 
-vi.mock("@/lib/server/repositories/chat-repository", () => ({
+vi.mock("@/features/chat/server/repositories/chat-repository", () => ({
   chatRepository: repositoryMock
 }));
 
-vi.mock("@/lib/server/clients/dashscope-client", () => ({
+vi.mock("@/server/clients/dashscope-client", () => ({
   createDashScopeChatStream: createDashScopeChatStreamMock
 }));
 
-vi.mock("@/lib/server/repositories/attachment-repository", () => ({
+vi.mock("@/features/files/server/repositories/attachment-repository", () => ({
   attachmentRepository: attachmentRepositoryMock
 }));
 
-vi.mock("@/lib/server/knowledge", () => ({
+vi.mock("@/features/chat/server/knowledge/knowledge", () => ({
   retrieveKnowledgeContext: vi.fn(async () => [])
 }));
 
-vi.mock("@/lib/server/services/usage-service", () => ({
+vi.mock("@/features/usage/server/services/usage-service", () => ({
   recordDailyUsage: recordDailyUsageMock
 }));
 
-vi.mock("@/lib/server/aliyun", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/server/aliyun")>("@/lib/server/aliyun");
+vi.mock("@/server/config/aliyun", async () => {
+  const actual = await vi.importActual<typeof import("@/server/config/aliyun")>("@/server/config/aliyun");
   return {
     ...actual,
     resolveModelByMode: vi.fn((mode?: string) => (mode === "fast" ? "qwen-turbo" : "qwen-plus"))
@@ -54,7 +54,7 @@ describe("chat stream service", () => {
 
   it("creates a new chat and placeholder assistant when no chatId is provided", async () => {
     const upstream = {} as AsyncIterable<unknown>;
-    const { startChatStream } = await import("@/lib/server/services/chat-stream-service");
+    const { startChatStream } = await import("@/features/chat/server/services/chat-stream-service");
 
     repositoryMock.createChat.mockResolvedValueOnce({ id: "chat-1" });
     repositoryMock.createUserMessage.mockResolvedValueOnce({});
@@ -79,7 +79,7 @@ describe("chat stream service", () => {
   });
 
   it("finalizes assistant output and updates chat", async () => {
-    const { finalizeChatStream } = await import("@/lib/server/services/chat-stream-service");
+    const { finalizeChatStream } = await import("@/features/chat/server/services/chat-stream-service");
 
     await finalizeChatStream({
       userId: "user-1",
@@ -107,7 +107,7 @@ describe("chat stream service", () => {
   });
 
   it("marks assistant output as failed", async () => {
-    const { failChatStream } = await import("@/lib/server/services/chat-stream-service");
+    const { failChatStream } = await import("@/features/chat/server/services/chat-stream-service");
 
     await failChatStream({
       assistantMessageId: "msg-1",
@@ -120,7 +120,7 @@ describe("chat stream service", () => {
 
   it("injects extracted attachment text into model context", async () => {
     const upstream = {} as AsyncIterable<unknown>;
-    const { startChatStream } = await import("@/lib/server/services/chat-stream-service");
+    const { startChatStream } = await import("@/features/chat/server/services/chat-stream-service");
 
     repositoryMock.createChat.mockResolvedValueOnce({ id: "chat-1" });
     repositoryMock.createUserMessage.mockResolvedValueOnce({ id: "user-1" });

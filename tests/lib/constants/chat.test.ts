@@ -4,7 +4,7 @@ import {
   CHAT_TITLE_MAX_LENGTH,
   DEFAULT_ASSISTANT_MODEL,
   DEFAULT_NEW_CHAT_TITLE
-} from "@/lib/constants/chat";
+} from "@/features/chat/constants/chat";
 
 describe("chat constants", () => {
   it("exposes stable chat title length", () => {

@@ -15,7 +15,7 @@ const dbMock = {
   }
 };
 
-vi.mock("@/lib/server/db", () => ({
+vi.mock("@/server/db/db", () => ({
   db: dbMock
 }));
 
@@ -25,7 +25,7 @@ describe("chatRepository", () => {
   });
 
   it("lists chats with pinned and updated ordering", async () => {
-    const { chatRepository } = await import("@/lib/server/repositories/chat-repository");
+    const { chatRepository } = await import("@/features/chat/server/repositories/chat-repository");
     dbMock.chat.findMany.mockResolvedValueOnce([]);
 
     await chatRepository.listChats("user-1");
@@ -37,7 +37,7 @@ describe("chatRepository", () => {
   });
 
   it("creates a user message with done status", async () => {
-    const { chatRepository } = await import("@/lib/server/repositories/chat-repository");
+    const { chatRepository } = await import("@/features/chat/server/repositories/chat-repository");
     dbMock.message.create.mockResolvedValueOnce({});
 
     await chatRepository.createUserMessage("chat-1", "hello");

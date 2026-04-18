@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { toChatSummary, toClientMessage } from "@/lib/server/chat-mappers";
+import { toChatSummary, toClientMessage } from "@/features/chat/server/mappers/chat-mappers";
 
 describe("chat mappers", () => {
   it("maps chat entities to summaries", () => {

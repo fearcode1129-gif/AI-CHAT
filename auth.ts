@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth/next";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 
-import { db } from "@/lib/server/db";
+import { db } from "@/server/db/db";
 
 export const authOptions: any = {
   session: {

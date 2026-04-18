@@ -7,7 +7,7 @@ import {
   fetchChats,
   streamChat,
   updateChat
-} from "@/lib/client/chat-api";
+} from "@/features/chat/client/chat-api";
 
 describe("chat api client", () => {
   const fetchMock = vi.fn();

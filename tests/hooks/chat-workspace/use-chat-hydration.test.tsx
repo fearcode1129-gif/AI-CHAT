@@ -4,15 +4,16 @@ import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, waitFor } from "@testing-library/react";
 
-import { useChatHydration } from "@/hooks/chat-workspace/use-chat-hydration";
-import type { Message } from "@/lib/types";
+import { useChatHydration } from "@/features/chat/hooks/chat-workspace/use-chat-hydration";
+import type { Message } from "@/shared/types";
+import { useChatCacheStore } from "@/features/chat/stores/chat-cache-store";
 
-vi.mock("@/lib/client/chat-api", () => ({
+vi.mock("@/features/chat/client/chat-api", () => ({
   fetchChats: vi.fn(),
   fetchChatMessages: vi.fn()
 }));
 
-import { fetchChatMessages, fetchChats } from "@/lib/client/chat-api";
+import { fetchChatMessages, fetchChats } from "@/features/chat/client/chat-api";
 
 function Harness({
   activeChatId,
@@ -52,6 +53,7 @@ describe("useChatHydration", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    useChatCacheStore.getState().reset();
     cleanup();
   });
 

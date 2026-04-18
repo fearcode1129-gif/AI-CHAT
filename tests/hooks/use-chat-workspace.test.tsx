@@ -4,11 +4,12 @@ import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 
-import { useChatWorkspace } from "@/hooks/use-chat-workspace";
+import { useChatWorkspace } from "@/features/chat/hooks/use-chat-workspace";
 
-vi.mock("@/lib/client/chat-api", () => ({
+vi.mock("@/features/chat/client/chat-api", () => ({
   fetchChats: vi.fn(),
   fetchChatMessages: vi.fn(),
+  createChat: vi.fn(),
   streamChat: vi.fn(),
   updateChat: vi.fn(),
   deleteChat: vi.fn(),
@@ -21,7 +22,10 @@ import {
   fetchChats,
   streamChat,
   updateChat
-} from "@/lib/client/chat-api";
+} from "@/features/chat/client/chat-api";
+import { useChatCacheStore } from "@/features/chat/stores/chat-cache-store";
+import { useStreamTaskStore } from "@/features/chat/stores/stream-task-store";
+import { useChatWorkspaceStore } from "@/features/chat/stores/chat-workspace-store";
 
 function Harness() {
   const state = useChatWorkspace();
@@ -63,6 +67,9 @@ describe("useChatWorkspace recent chat actions", () => {
   });
 
   afterEach(() => {
+    useChatCacheStore.getState().reset();
+    useStreamTaskStore.getState().reset();
+    useChatWorkspaceStore.getState().reset();
     cleanup();
     vi.clearAllMocks();
   });
