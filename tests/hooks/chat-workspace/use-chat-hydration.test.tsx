@@ -53,11 +53,35 @@ describe("useChatHydration", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
     useChatCacheStore.getState().reset();
     cleanup();
   });
 
   it("hydrates chats on mount", async () => {
+    const { getByTestId } = render(<Harness activeChatId={null} />);
+
+    await waitFor(() => {
+      expect(getByTestId("chat-count").textContent).toBe("1");
+      expect(getByTestId("hydrating").textContent).toBe("false");
+    });
+  });
+
+  it("restores cached chats before the server response arrives", async () => {
+    vi.mocked(fetchChats).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          window.setTimeout(() => resolve([{ id: "chat-1", title: "Server", updatedAt: "now" }]), 25);
+        })
+    );
+    window.localStorage.setItem(
+      "ai-chat:chat-list:v1",
+      JSON.stringify({
+        savedAt: Date.now(),
+        chats: [{ id: "cached-chat", title: "Cached", updatedAt: "cached" }]
+      })
+    );
+
     const { getByTestId } = render(<Harness activeChatId={null} />);
 
     await waitFor(() => {

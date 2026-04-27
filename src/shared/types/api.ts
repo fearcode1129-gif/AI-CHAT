@@ -3,10 +3,12 @@ import type { ChatSummary, Message, UsageCredits } from "@/shared/types";
 export type StreamEvent =
   | { type: "meta"; chatId?: string; model?: string }
   | { type: "delta"; delta: string }
+  | { type: "quota_exceeded"; error?: string }
   | { type: "done"; chatId?: string; model?: string }
   | { type: "error"; error?: string };
 
 export type StreamChatRequest = {
+  streamId?: string;
   chatId?: string;
   title?: string;
   mode?: string;

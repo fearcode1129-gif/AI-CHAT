@@ -41,7 +41,7 @@ export type Message = {
   role: "user" | "assistant";
   content: string;
   createdAt: string;
-  status?: "done" | "streaming" | "error";
+  status?: "done" | "streaming" | "error" | "quota_exceeded";
   attachments?: Attachment[];
   model?: string;
 };

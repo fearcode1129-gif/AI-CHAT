@@ -106,7 +106,8 @@ textarea {
   font-size: 0.92em;
 }
 
-.message-markdown pre {
+.message-markdown pre,
+.message-markdown .shiki {
   overflow-x: auto;
   border-radius: 20px;
   background: #101828;
@@ -114,7 +115,8 @@ textarea {
   padding: 1rem;
 }
 
-.message-markdown pre code {
+.message-markdown pre code,
+.message-markdown .shiki code {
   background: transparent;
   padding: 0;
 }

@@ -3,6 +3,10 @@
 import { startTransition, useEffect, useRef } from "react";
 
 import { fetchChatMessages, fetchChats } from "@/features/chat/client/chat-api";
+import {
+  readCachedChatList,
+  writeCachedChatList
+} from "@/features/chat/client/chat-local-cache";
 import { useChatCacheStore } from "@/features/chat/stores/chat-cache-store";
 
 type UseChatHydrationArgs = {
@@ -20,6 +24,14 @@ export function useChatHydration({ activeChatId }: UseChatHydrationArgs) {
 
   useEffect(() => {
     let cancelled = false;
+    const cachedChats = readCachedChatList();
+
+    if (cachedChats.length > 0) {
+      startTransition(() => {
+        setChats(cachedChats);
+        setIsHydrating(false);
+      });
+    }
 
     const hydrateChats = async () => {
       try {
@@ -31,6 +43,7 @@ export function useChatHydration({ activeChatId }: UseChatHydrationArgs) {
         startTransition(() => {
           setChats(nextChats);
         });
+        writeCachedChatList(nextChats);
       } finally {
         if (!cancelled) {
           setIsHydrating(false);
@@ -93,6 +106,7 @@ export function useChatHydration({ activeChatId }: UseChatHydrationArgs) {
       setChats(nextChats);
       setMessagesByChat((current) => ({ ...current, [chatId]: nextMessages }));
     });
+    writeCachedChatList(nextChats);
   };
 
   const syncChats = async () => {
@@ -100,6 +114,7 @@ export function useChatHydration({ activeChatId }: UseChatHydrationArgs) {
     startTransition(() => {
       setChats(nextChats);
     });
+    writeCachedChatList(nextChats);
   };
 
   return {

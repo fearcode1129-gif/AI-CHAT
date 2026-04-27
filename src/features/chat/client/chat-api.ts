@@ -124,6 +124,20 @@ export async function streamChat(
   }
 }
 
+export async function cancelChatStream(streamId: string) {
+  const response = await fetch("/api/chat/stream/cancel", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ streamId })
+  });
+
+  if (!response.ok) {
+    await parseJson(response);
+  }
+}
+
 export async function uploadFiles(input: { files: File[]; purpose: "attachment" | "knowledge" }) {
   const formData = new FormData();
   formData.append("purpose", input.purpose);

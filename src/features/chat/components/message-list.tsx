@@ -12,7 +12,7 @@ type MessageListProps = {
 const AUTO_SCROLL_THRESHOLD = 120;
 const MESSAGE_BOTTOM_GAP = 24;
 const AssistantMarkdown = lazy(async () => {
-const module = await import("@/shared/components/assistant-markdown");
+  const module = await import("@/shared/components/assistant-markdown");
   return { default: module.AssistantMarkdown };
 });
 
@@ -34,15 +34,19 @@ export function MessageList({ messages, bottomOffset = 0 }: MessageListProps) {
 
   const scheduleScrollToBottom = () => {
     if (frameRef.current !== null) {
-      cancelAnimationFrame(frameRef.current);
+      return;
     }
 
-    frameRef.current = requestAnimationFrame(() => {
+    let frameDidRun = false;
+    let frameId = 0;
+    frameId = requestAnimationFrame(() => {
+      frameDidRun = true;
+      if (frameRef.current === frameId) {
+        frameRef.current = null;
+      }
       scrollToBottom();
-      frameRef.current = requestAnimationFrame(() => {
-        scrollToBottom();
-      });
     });
+    frameRef.current = frameDidRun ? null : frameId;
   };
 
   const updateAutoScrollState = () => {
@@ -86,7 +90,6 @@ export function MessageList({ messages, bottomOffset = 0 }: MessageListProps) {
     resizeObserver?.observe(content);
     mutationObserver?.observe(content, {
       childList: true,
-      characterData: true,
       subtree: true
     });
 
@@ -138,7 +141,7 @@ export function MessageList({ messages, bottomOffset = 0 }: MessageListProps) {
                   className={clsx(
                     "rounded-[28px] px-5 py-4",
                     isAssistant
-                      ? message.status === "error"
+                      ? message.status === "error" || message.status === "quota_exceeded"
                         ? "bg-red-50 shadow-soft ring-1 ring-red-200"
                         : "bg-card/92 shadow-soft ring-1 ring-[var(--outline-soft)]"
                       : "bg-[linear-gradient(135deg,#4C86FB_0%,#3875F6_100%)] text-white shadow-float"
@@ -148,11 +151,16 @@ export function MessageList({ messages, bottomOffset = 0 }: MessageListProps) {
                     <div
                       className={clsx(
                         "message-markdown text-[15px] leading-7",
-                        message.status === "error" ? "text-red-700" : "text-text-secondary"
+                        message.status === "error" || message.status === "quota_exceeded"
+                          ? "text-red-700"
+                          : "text-text-secondary"
                       )}
                     >
                       <Suspense fallback={<p className="whitespace-pre-wrap">{message.content}</p>}>
-                        <AssistantMarkdown content={message.content} />
+                        <AssistantMarkdown
+                          content={message.content}
+                          isStreaming={message.status === "streaming"}
+                        />
                       </Suspense>
                       {message.status === "streaming" ? (
                         <span className="ml-1 inline-block h-5 w-2 animate-pulse rounded bg-primary/70 align-middle" />

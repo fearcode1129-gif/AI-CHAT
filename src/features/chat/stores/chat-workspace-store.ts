@@ -1,12 +1,12 @@
 "use client";
 
-import { create } from "zustand";
 import type { Dispatch, SetStateAction } from "react";
+import { create } from "zustand";
 
 import type { Attachment, WorkspaceSection } from "@/shared/types";
 
 export const DEFAULT_HELPER_TEXT =
-  "鏀寔 Enter 鍙戦€併€丼hift + Enter 鎹㈣锛屽悗缁彲鎺ュ叆闄勪欢涓婁紶銆佽闊宠緭鍏ヤ笌鐭ヨ瘑搴撴绱€?";
+  "支持 Enter 发送，Shift + Enter 换行，后续可接入附件上传、语音输入与知识库检索。";
 
 type ChatWorkspaceStore = {
   activeChatId: string | null;

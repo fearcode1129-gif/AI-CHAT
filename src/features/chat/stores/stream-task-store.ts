@@ -2,7 +2,13 @@
 
 import { create } from "zustand";
 
-export type StreamTaskStatus = "pending" | "streaming" | "done" | "error" | "aborted";
+export type StreamTaskStatus =
+  | "pending"
+  | "streaming"
+  | "done"
+  | "error"
+  | "aborted"
+  | "quota_exceeded";
 
 export type StreamTask = {
   streamId: string;

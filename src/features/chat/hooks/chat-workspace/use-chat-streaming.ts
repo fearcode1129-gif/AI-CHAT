@@ -2,7 +2,12 @@
 
 import { useRef } from "react";
 
-import { createChat, generateImage, streamChat } from "@/features/chat/client/chat-api";
+import {
+  cancelChatStream,
+  createChat,
+  generateImage,
+  streamChat
+} from "@/features/chat/client/chat-api";
 import {
   CHAT_TITLE_MAX_LENGTH,
   DEFAULT_ASSISTANT_MODEL,
@@ -41,9 +46,14 @@ type UseChatStreamingArgs = {
 };
 
 const DEFAULT_HELPER_TEXT =
-  "鏀寔 Enter 鍙戦€併€丼hift + Enter 鎹㈣锛屽悗缁彲鎺ュ叆闄勪欢涓婁紶銆佽闊宠緭鍏ヤ笌鐭ヨ瘑搴撴绱€?";
-const QUOTA_EXCEEDED_HELPER_TEXT = "浠婃棩棰濆害宸茬敤瀹岋紝灏嗕簬姣忔棩 0 鐐硅嚜鍔ㄩ噸缃€?";
+  "Press Enter to send. Shift + Enter inserts a new line.";
+const QUOTA_EXCEEDED_HELPER_TEXT = "Daily quota exhausted. It resets at midnight.";
+const STREAM_QUOTA_EXCEEDED_HELPER_TEXT =
+  "Daily quota exhausted. Generation has been paused.";
 const TEMP_CHAT_PREFIX = "chat-temp-";
+const TYPING_CHARACTERS_PER_SECOND = 72;
+const MAX_TYPING_CHARACTERS_PER_FRAME = 2;
+const USAGE_REFRESH_INTERVAL_MS = 5000;
 
 function isTemporaryChatId(chatId: string | null | undefined): chatId is string {
   return Boolean(chatId && chatId.startsWith(TEMP_CHAT_PREFIX));
@@ -74,7 +84,15 @@ export function useChatStreaming({
   onUsageChanged
 }: UseChatStreamingArgs) {
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
+  const pendingStopStreamIdsRef = useRef<Set<string>>(new Set());
   const pendingChatResolutionsRef = useRef<Map<string, Promise<string>>>(new Map());
+  const usageRefreshStateRef = useRef<{
+    timerId: number | null;
+    lastRunAt: number;
+  }>({
+    timerId: null,
+    lastRunAt: 0
+  });
 
   const startTask = useStreamTaskStore((state) => state.startTask);
   const updateTask = useStreamTaskStore((state) => state.updateTask);
@@ -122,6 +140,11 @@ export function useChatStreaming({
   };
 
   const stopStream = (streamId: string) => {
+    pendingStopStreamIdsRef.current.add(streamId);
+    void cancelChatStream(streamId).catch(() => {
+      // The local abort below still stops the UI even if the server cancel request fails.
+    });
+
     const controller = abortControllersRef.current.get(streamId);
     if (!controller) {
       return;
@@ -130,13 +153,19 @@ export function useChatStreaming({
     controller.abort();
   };
 
-  const stopGeneration = (chatId = useChatWorkspaceStore.getState().activeChatId) => {
-    if (!chatId) {
+  const stopGeneration = (chatId?: string | null) => {
+    const targetChatId = chatId ?? activeChatId;
+    if (!targetChatId) {
       return;
     }
 
-    const activeStreamIds = useStreamTaskStore.getState().activeStreamIdsByChat[chatId] ?? [];
-    for (const streamId of activeStreamIds) {
+    const streamState = useStreamTaskStore.getState();
+    const activeStreamIds = streamState.activeStreamIdsByChat[targetChatId] ?? [];
+    const fallbackStreamIds =
+      activeStreamIds.length > 0
+        ? activeStreamIds
+        : Object.values(streamState.activeStreamIdsByChat).flat();
+    for (const streamId of fallbackStreamIds) {
       stopStream(streamId);
     }
   };
@@ -157,13 +186,15 @@ export function useChatStreaming({
     const title = content.slice(0, CHAT_TITLE_MAX_LENGTH) || DEFAULT_NEW_CHAT_TITLE;
     const { userMessage, assistantMessage } = createDraftMessages(content, attachments);
     const streamId = createStreamId();
+    const controller = new AbortController();
+    abortControllersRef.current.set(streamId, controller);
 
     if (creating) {
       setActiveChatId(draftChatId);
       setActiveSectionHome();
     } else {
       setChats((current) =>
-        current.map((chat) => (chat.id === draftChatId ? { ...chat, updatedAt: "鍒氬垰" } : chat))
+        current.map((chat) => (chat.id === draftChatId ? { ...chat, updatedAt: "Just now" } : chat))
       );
     }
 
@@ -182,9 +213,10 @@ export function useChatStreaming({
 
     setDraft("");
     setAttachments([]);
-    setHelperText?.("姝ｅ湪澶勭悊涓?..");
+    setHelperText?.("Generating response...");
 
     let resolvedChatId = draftChatId;
+    let streamStarted = false;
 
     try {
       resolvedChatId = await resolveChatId(draftChatId, title);
@@ -194,11 +226,13 @@ export function useChatStreaming({
         updateAssistantMessage(current, draftChatId, assistantMessage.id, (message) => ({
           ...message,
           status: "error",
-          content: `鍙戦€佸け璐ワ細${error instanceof Error ? error.message : "鏈煡閿欒"}`
+          content: `Failed to create chat: ${error instanceof Error ? error.message : "Unknown error"}`
         }))
       );
       completeTask(streamId, "error", error instanceof Error ? error.message : "Unknown error");
-      setHelperText?.("浼氳瘽鍒涘缓澶辫触锛岃绋嶅悗鍐嶈瘯銆?");
+      setHelperText?.("Failed to create chat. Please try again.");
+      pendingStopStreamIdsRef.current.delete(streamId);
+      abortControllersRef.current.delete(streamId);
       return;
     }
 
@@ -212,29 +246,28 @@ export function useChatStreaming({
 
         setChats((current) =>
           current.map((chat) =>
-            chat.id === resolvedChatId ? { ...chat, updatedAt: "鍒氬垰", model: result.model } : chat
+            chat.id === resolvedChatId ? { ...chat, updatedAt: "Just now", model: result.model } : chat
           )
         );
         completeTask(streamId, "done");
-        setHelperText?.("鍥惧儚宸茬敓鎴愬畬鎴愩€?");
+        setHelperText?.("Image generation completed.");
         await syncChatSnapshot(result.chatId);
       } catch (error) {
         setMessagesByChat((current) =>
           updateAssistantMessage(current, resolvedChatId, assistantMessage.id, (message) => ({
             ...message,
             status: "error",
-            content: `鍥惧儚鐢熸垚澶辫触锛?{error instanceof Error ? error.message : "鏈煡閿欒"}`
+            content: `Image generation failed: ${error instanceof Error ? error.message : "Unknown error"}`
           }))
         );
         completeTask(streamId, "error", error instanceof Error ? error.message : "Unknown error");
-        setHelperText?.("鍥惧儚鐢熸垚澶辫触銆?");
+        setHelperText?.("Image generation failed.");
       }
 
+      pendingStopStreamIdsRef.current.delete(streamId);
+      abortControllersRef.current.delete(streamId);
       return;
     }
-
-    const controller = new AbortController();
-    abortControllersRef.current.set(streamId, controller);
 
     const promptMessages = [...(messagesByChat[draftChatId] ?? []), userMessage]
       .filter(
@@ -247,6 +280,165 @@ export function useChatStreaming({
         content: message.content
       }));
 
+    let pendingAssistantCharacters: string[] = [];
+    let pendingDoneModel: string | null = null;
+    let typingFrameId: number | null = null;
+    let lastTypingFrameTime = 0;
+    let typingCharacterBudget = 0;
+    let typingDrainResolvers: Array<() => void> = [];
+
+    const refreshUsageSoon = () => {
+      if (!onUsageChanged) {
+        return;
+      }
+
+      const state = usageRefreshStateRef.current;
+      const now = Date.now();
+      const elapsed = now - state.lastRunAt;
+
+      if (elapsed >= USAGE_REFRESH_INTERVAL_MS && state.timerId === null) {
+        state.lastRunAt = now;
+        void onUsageChanged();
+        return;
+      }
+
+      if (state.timerId !== null) {
+        return;
+      }
+
+      state.timerId = window.setTimeout(() => {
+        state.timerId = null;
+        state.lastRunAt = Date.now();
+        void onUsageChanged?.();
+      }, Math.max(0, USAGE_REFRESH_INTERVAL_MS - elapsed));
+    };
+
+    const stopTypingLoop = () => {
+      if (typingFrameId !== null) {
+        window.cancelAnimationFrame(typingFrameId);
+        typingFrameId = null;
+      }
+      lastTypingFrameTime = 0;
+      typingCharacterBudget = 0;
+    };
+
+    const resolveTypingDrainIfReady = () => {
+      if (pendingAssistantCharacters.length > 0 || pendingDoneModel || typingFrameId !== null) {
+        return;
+      }
+
+      const resolvers = typingDrainResolvers;
+      typingDrainResolvers = [];
+      for (const resolve of resolvers) {
+        resolve();
+      }
+    };
+
+    const waitForTypingDrain = () => {
+      if (pendingAssistantCharacters.length === 0 && !pendingDoneModel && typingFrameId === null) {
+        return Promise.resolve();
+      }
+
+      return new Promise<void>((resolve) => {
+        typingDrainResolvers.push(resolve);
+      });
+    };
+
+    const markAssistantDoneIfReady = () => {
+      if (pendingAssistantCharacters.length > 0 || !pendingDoneModel) {
+        resolveTypingDrainIfReady();
+        return;
+      }
+
+      const model = pendingDoneModel;
+      pendingDoneModel = null;
+      setMessagesByChat((current) =>
+        updateAssistantMessage(current, resolvedChatId, assistantMessage.id, (message) => ({
+          ...message,
+          status: "done",
+          model
+        }))
+      );
+      resolveTypingDrainIfReady();
+    };
+
+    const flushAssistantDelta = (characterCount?: number) => {
+      if (pendingAssistantCharacters.length === 0) {
+        stopTypingLoop();
+        markAssistantDoneIfReady();
+        return;
+      }
+
+      const count = Math.max(1, Math.min(characterCount ?? 1, pendingAssistantCharacters.length));
+      const nextDelta = pendingAssistantCharacters.splice(0, count).join("");
+
+      setMessagesByChat((current) =>
+        appendAssistantDelta(
+          current,
+          resolvedChatId,
+          assistantMessage.id,
+          nextDelta,
+          activeModel ?? DEFAULT_ASSISTANT_MODEL
+        )
+      );
+
+      if (pendingAssistantCharacters.length === 0) {
+        stopTypingLoop();
+        markAssistantDoneIfReady();
+        resolveTypingDrainIfReady();
+      }
+    };
+
+    const runTypingFrame = (timestamp: number) => {
+      typingFrameId = null;
+
+      if (pendingAssistantCharacters.length === 0) {
+        stopTypingLoop();
+        markAssistantDoneIfReady();
+        resolveTypingDrainIfReady();
+        return;
+      }
+
+      if (lastTypingFrameTime === 0) {
+        lastTypingFrameTime = timestamp;
+      }
+
+      const elapsedSeconds = Math.min(0.1, Math.max(0, (timestamp - lastTypingFrameTime) / 1000));
+      lastTypingFrameTime = timestamp;
+      typingCharacterBudget += elapsedSeconds * TYPING_CHARACTERS_PER_SECOND;
+
+      const characterCount = Math.min(
+        MAX_TYPING_CHARACTERS_PER_FRAME,
+        Math.floor(typingCharacterBudget)
+      );
+
+      if (characterCount > 0) {
+        typingCharacterBudget -= characterCount;
+        flushAssistantDelta(characterCount);
+      }
+
+      if (pendingAssistantCharacters.length > 0 || pendingDoneModel) {
+        scheduleAssistantDeltaFlush();
+        return;
+      }
+
+      resolveTypingDrainIfReady();
+    };
+
+    const scheduleAssistantDeltaFlush = () => {
+      if (typingFrameId !== null) {
+        return;
+      }
+
+      typingFrameId = window.requestAnimationFrame(runTypingFrame);
+    };
+
+    const queueAssistantDelta = (delta: string) => {
+      pendingAssistantCharacters.push(...Array.from(delta));
+      scheduleAssistantDeltaFlush();
+      refreshUsageSoon();
+    };
+
     const handleStreamEvent = (payload: StreamEvent) => {
       if (payload.type === "meta") {
         updateTask(streamId, (task) => ({
@@ -254,6 +446,7 @@ export function useChatStreaming({
           status: "streaming",
           chatId: payload.chatId ?? resolvedChatId
         }));
+        refreshUsageSoon();
 
         if (payload.model) {
           setActiveModel(payload.model);
@@ -263,7 +456,7 @@ export function useChatStreaming({
                 ? {
                     ...chat,
                     model: payload.model,
-                    updatedAt: "鍒氬垰"
+                    updatedAt: "Just now"
                   }
                 : chat
             )
@@ -274,15 +467,26 @@ export function useChatStreaming({
       }
 
       if (payload.type === "delta") {
+        queueAssistantDelta(payload.delta);
+        return;
+      }
+
+      if (payload.type === "quota_exceeded") {
+        flushAssistantDelta(pendingAssistantCharacters.length);
         setMessagesByChat((current) =>
-          appendAssistantDelta(
-            current,
-            resolvedChatId,
-            assistantMessage.id,
-            payload.delta,
-            activeModel ?? DEFAULT_ASSISTANT_MODEL
-          )
+          updateAssistantMessage(current, resolvedChatId, assistantMessage.id, (message) => ({
+            ...message,
+            status: "quota_exceeded",
+            content: message.content || payload.error || STREAM_QUOTA_EXCEEDED_HELPER_TEXT
+          }))
         );
+        completeTask(
+          streamId,
+          "quota_exceeded",
+          payload.error ?? STREAM_QUOTA_EXCEEDED_HELPER_TEXT
+        );
+        setHelperText?.(payload.error ?? STREAM_QUOTA_EXCEEDED_HELPER_TEXT);
+        void onUsageChanged?.();
         return;
       }
 
@@ -291,19 +495,20 @@ export function useChatStreaming({
       }
 
       if (payload.type === "done") {
-        setMessagesByChat((current) =>
-          updateAssistantMessage(current, resolvedChatId, assistantMessage.id, (message) => ({
-            ...message,
-            status: "done",
-            model: payload.model ?? activeModel ?? DEFAULT_ASSISTANT_MODEL
-          }))
-        );
+        pendingDoneModel = payload.model ?? activeModel ?? DEFAULT_ASSISTANT_MODEL;
+        scheduleAssistantDeltaFlush();
       }
     };
 
     try {
+      if (controller.signal.aborted || pendingStopStreamIdsRef.current.has(streamId)) {
+        throw new DOMException("The operation was aborted.", "AbortError");
+      }
+
+      streamStarted = true;
       await streamChat(
         {
+          streamId,
           chatId: resolvedChatId,
           title,
           mode: activeMode,
@@ -314,6 +519,7 @@ export function useChatStreaming({
         handleStreamEvent
       );
 
+      await waitForTypingDrain();
       completeTask(streamId, "done");
 
       const remainingStreams =
@@ -321,12 +527,12 @@ export function useChatStreaming({
       if (remainingStreams === 0) {
         setHelperText?.(
           activeMode === "knowledge"
-            ? "宸茬粨鍚堢煡璇嗗簱鍐呭瀹屾垚鍥炵瓟銆?"
+            ? "Answered with knowledge context."
             : DEFAULT_HELPER_TEXT
         );
         await syncChatSnapshot(resolvedChatId);
       } else {
-        setHelperText?.("褰撳墠浼氳瘽杩樻湁鍏朵粬鍥炵瓟姝ｅ湪鐢熸垚涓€?");
+        setHelperText?.("Another response is still generating in this chat.");
         await syncChats();
       }
 
@@ -337,15 +543,16 @@ export function useChatStreaming({
         error instanceof Error && "code" in error ? String((error as { code?: string }).code) : undefined;
       const isQuotaError = errorCode === "DAILY_QUOTA_EXCEEDED";
 
+      flushAssistantDelta(pendingAssistantCharacters.length);
       setMessagesByChat((current) =>
         updateAssistantMessage(current, resolvedChatId, assistantMessage.id, (message) => ({
           ...message,
           status: isAbort ? "done" : isQuotaError ? "done" : "error",
           content: isAbort
-            ? message.content || "宸插仠姝㈢敓鎴愩€?"
+            ? message.content || "Generation stopped."
             : isQuotaError
               ? message.content || QUOTA_EXCEEDED_HELPER_TEXT
-              : `鐢熸垚澶辫触锛?{error instanceof Error ? error.message : "鏈煡閿欒"}`
+              : `Generation failed: ${error instanceof Error ? error.message : "Unknown error"}`
         }))
       );
       completeTask(
@@ -358,13 +565,20 @@ export function useChatStreaming({
           ? DEFAULT_HELPER_TEXT
           : isQuotaError
             ? QUOTA_EXCEEDED_HELPER_TEXT
-            : "鐢熸垚澶辫触锛岃绋嶅悗鍐嶈瘯銆?"
+            : "Generation failed. Please try again."
       );
+
+      if (isAbort && streamStarted) {
+        await syncChatSnapshot(resolvedChatId);
+        await onUsageChanged?.();
+      }
 
       if (isQuotaError) {
         await onUsageChanged?.();
       }
     } finally {
+      stopTypingLoop();
+      pendingStopStreamIdsRef.current.delete(streamId);
       abortControllersRef.current.delete(streamId);
     }
   };

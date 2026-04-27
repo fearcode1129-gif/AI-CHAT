@@ -10,6 +10,7 @@ type StreamInputMessage = {
 export async function createDashScopeChatStream(input: {
   model: string;
   messages: StreamInputMessage[];
+  signal?: AbortSignal;
 }) {
   const { apiKey, baseURL } = getDashScopeConfig();
   const client = new OpenAI({
@@ -21,5 +22,7 @@ export async function createDashScopeChatStream(input: {
     model: input.model,
     stream: true,
     messages: input.messages
+  }, {
+    signal: input.signal
   });
 }
